@@ -16,15 +16,15 @@ Referências úteis
 Objetivo: alinhar escopo, inventariar workloads e preparar decisões de base.
 
 Tarefas
-- [ ] Inventariar workloads atuais: Deployments/StatefulSets, PVCs, Ingress, Secrets, ConfigMaps
-- [ ] Identificar requisitos de rede (DNS, domínios, TLS, VIPs, ranges MetalLB)
-- [ ] Definir emissor de certificados (Let’s Encrypt ou CA interna)
-- [ ] Escolher stack Ingress (NGINX ou Traefik) e CNI (Cilium preferido)
-- [ ] Definir política de storage (Longhorn padrão, classes e réplicas)
-- [ ] Definir estratégia de GitOps (Argo CD ou Flux) e layout do repositório Git
+- [x] Inventariar workloads atuais: Deployments/StatefulSets, PVCs, Ingress, Secrets, ConfigMaps (rascunho em `docs/inventory/workloads.md`)
+- [x] Identificar requisitos de rede (DNS, domínios, TLS, VIPs, ranges MetalLB) (rascunho em `docs/network/requirements.md`)
+- [x] Definir emissor de certificados (Let’s Encrypt ou CA interna)
+- [x] Escolher stack Ingress (NGINX ou Traefik) e CNI (Cilium preferido)
+- [x] Definir política de storage (Longhorn padrão, classes e réplicas)
+- [x] Definir estratégia de GitOps (Argo CD ou Flux) e layout do repositório Git
 - [ ] Decidir sobre MinIO para backups (Velero) e endpoint S3
 - [ ] Elaborar janela e estratégia de cutover + rollback
-- [ ] Definir estratégia de acesso externo sem IP fixo (MikroTik): WireGuard/Tailscale para admins e Cloudflare Tunnel para HTTP(S)
+- [x] Definir estratégia de acesso externo sem IP fixo (MikroTik): WireGuard/Tailscale para admins e Cloudflare Tunnel para HTTP(S)
 - [ ] Escolher provedor DNS (Cloudflare recomendado), emitir API Tokens mínimos
 
 Entregáveis/DoD
@@ -169,9 +169,9 @@ Tarefas
 - [ ] Implantar GitLab CE (VM dedicada) com TLS, backup configurado
 - [ ] Habilitar GitLab Container Registry e políticas de retenção
 - [ ] Instalar GitLab Runner no cluster PROD (executor Kubernetes, permissões mínimas)
-- [ ] Estruturar repositório Git com `environments/dev|stg|prod` e overlays (Kustomize/Helm)
+- [x] Estruturar repositório Git com `environments/dev|stg|prod` e overlays (Kustomize/Helm)
 - [ ] Instalar e bootstrap do Argo CD/Flux apontando para repositórios/overlays de PROD
-- [ ] Definir política: Portainer apenas para operações pontuais; mudanças persistentes via GitOps (documentar no `copilot_instrutions.md`)
+- [x] Definir política: Portainer apenas para operações pontuais; mudanças persistentes via GitOps (documentar no `copilot_instrutions.md`)
 
 Entregáveis/DoD
 - [ ] Pipeline CI publica imagem no Registry e atualiza manifests
