@@ -1,0 +1,87 @@
+# OS / Editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.code-workspace
+
+# Logs / temp
+*.log
+logs/
+log/
+*.swp
+*.swo
+*.tmp
+*~
+.tmp/
+.tmp/**
+.cache/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Go (binaries)
+bin/
+
+# Vagrant / VirtualBox
+.vagrant/
+*.box
+*.vdi
+*.vmdk
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+terraform.tfvars
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Helm (packaged charts)
+*/charts/*.tgz
+
+# Kustomize / build artifacts
+build/
+dist/
+tmp/
+
+# Kubernetes kubeconfig (não versione credenciais locais)
+kubeconfig
+kubeconfig*
+*.kubeconfig
+.kube/
+
+# Segredos e chaves (use Vault/ESO)
+.env
+.env.*
+*.secrets.*
+*.secret
+*.key
+*.pem
+*.p12
+*.agekey
+.age-key*
+.envrc
+
+# Docker / Compose (locais)
+docker-compose.override.yml
+.env.local
+
+# Cloudflare Tunnel
+.cloudflared/
