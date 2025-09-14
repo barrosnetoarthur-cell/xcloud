@@ -1,0 +1,16 @@
+name: Task
+about: Tarefa para sprints
+labels: chore
+body:
+  - type: textarea
+    id: desc
+    attributes:
+      label: Descrição
+  - type: input
+    id: sprint
+    attributes:
+      label: Sprint
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Critérios de aceite
