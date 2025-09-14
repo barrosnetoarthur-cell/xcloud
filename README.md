@@ -55,10 +55,12 @@ Este documento substitui o desenho anterior de “um único cluster distribuído
 - DNS: external-dns (opcional) para automatizar registros públicos/privados.
 - Bare-metal: MetalLB para LoadBalancer. Em cloud, usar LB gerenciado.
 - Evitar workers via WAN. Entre sites, usar clusters separados e, se necessário, malha de serviços (Istio/Linkerd) ou federation — apenas quando houver caso de uso real.
-- Acesso externo sem IP fixo (MikroTik/CGNAT):
-  - Preferir Cloudflare Tunnel (cloudflared) para publicar HTTP(S) sem portas abertas/sem IP fixo. Integre com cert-manager (DNS-01) e external-dns (Cloudflare).
-  - Acesso administrativo: VPN (WireGuard no MikroTik v7 → hub com IP fixo em VPS) ou Tailscale (NAT traversal, ACLs e SSO). Não usar VPN para tráfego de pods; apenas para administração (kubectl/SSH/GUI internas).
-  - Alternativa: DDNS + NAT no MikroTik com IP dinâmico (menos robusto, sujeito a mudanças de IP/CGNAT). Se houver CGNAT, use Tunnel/VPN outbound.
+- Publicação externa (decisão): WireGuard site→VPS + NGINX/Traefik
+  - VPS público: 136.243.94.243 (IP fixo). O DNS externo aponta para este IP.
+  - Túnel WireGuard entre site e VPS; proxy reverso no VPS para o Service do Ingress (MetalLB) no cluster.
+  - TLS termina no VPS (Let’s Encrypt). No cluster, Ingress pode operar HTTP (ou TLS pass-through se necessário).
+  - Em Ingress públicos, usar annotation do external-dns para forçar target: external-dns.alpha.kubernetes.io/target: "136.243.94.243".
+- Alternativa (quando sem VPS/IP público): Cloudflare Tunnel (cloudflared) + external-dns + cert-manager DNS-01.
 
 ## 4. Armazenamento e Backup
 - Storage em produção: Longhorn (simples e eficaz em bare‑metal) ou OpenEBS/Ceph conforme necessidades de performance/capacidade.
@@ -84,19 +86,13 @@ Este documento substitui o desenho anterior de “um único cluster distribuído
 - Auditoria do API Server habilitada (rotação e retenção de logs).
 
 ## 7. Gestão e Operação
-- Gestão do cluster: Rancher é adequado para multi‑cluster; Portainer pode ser usado para visão de containers, mas para Kubernetes Rancher costuma ser superior.
-- Portainer (opcional, política e local de hospedagem)
-  - Local da GUI: VM dedicada fora dos clusters (recomendado) com Docker/Compose, DNS: portainer.seu.domínio (TLS habilitado). Evita dependência circular caso o cluster esteja indisponível.
-  - Conexão aos clusters: instalar Edge Agent do Portainer em cada cluster (Helm), com conexão outbound segura para o Server (não expor o agent publicamente). Alternativa: Agent padrão com acesso via rede interna restrita.
-  - Uso: diagnóstico e operações pontuais. Mudanças permanentes devem seguir GitOps (MR → sync). Se algo for aplicado via Portainer, refletir a alteração em manifests via MR imediatamente.
-  - Segurança: RBAC mínimo (somente leitura por padrão), 2FA, IP allowlist/VPN administrativa, auditoria habilitada.
-- Upgrades: janela controlada, nós drenados (kubectl drain), canary, cordon/uncordon. Backup antes de upgrades.
-- Taints/tolerations e nodeSelectors para isolar workloads sensíveis.
-- Namespaces por domínio lógico (ex.: platform, observability, security) e por produto/equipe.
-- Quotas/LimitRanges por namespace.
-- Acesso remoto enterprise (sem IP fixo):
-  - VPN: WireGuard no MikroTik v7 em túnel site→hub (VPS com IP fixo). Dispositivo de salto (bastion) com acesso a API/K8s via ACLs. Alternativa: Tailscale com subnet routers e ACLs/SSO.
-  - Publicação segura: Cloudflare Tunnel para serviços HTTP(S) expostos externamente (ArgoCD, Grafana, apps), com SSO (Casdoor/IdP) via OIDC em proxy (oauth2-proxy/ingress-auth).
+- Gestão do cluster: Rancher será a ferramenta padrão para gestão de Kubernetes e multi‑cluster. Portainer não será adotado para gestão de Kubernetes neste projeto.
+- Rancher (padrão)
+  - Instalação: Helm chart oficial em `cattle-system`, 3 réplicas (HA), Ingress + TLS (cert-manager), DNS: `rancher.safepurelink.com` apontando para o IP público (via VPS/proxy).
+  - Acesso: restringir a VPN/Tunnel; habilitar OIDC/SSO quando disponível; considerar desabilitar login local após SSO.
+  - Segurança: RBAC mínimo, auditoria, backups/config export; seguir hardening da SUSE/Rancher.
+- Portainer (opcional, uso pontual de Docker/VMs)
+  - Se necessário, hospedar em VM fora dos clusters; não usar para gerenciar Kubernetes; evitar agents nos clusters; acesso somente via HTTPS e restrito.
 
 ## 8. Plano de Migração (do desenho atual → recomendado)
 - **Passo 0:** Inventário. Liste todos os workloads, PVCs, segredos e ingress atuais.
@@ -127,10 +123,13 @@ Ajuste conforme seu provedor/hypervisor. Em produção, prefira Ansible/Terrafor
 - **Backup:** instalar Velero (destino S3), jobs de agendamento e testes de restore.
 - **Observabilidade:** stack de métricas/logs/traces.
 - **GitOps:** instalar Argo CD/Flux e apontar para os repositórios/overlays.
-- **Publicação/Acceso externo (sem IP fixo)**
-  - Cloudflare Tunnel (cloudflared) no cluster PROD/STG apontando para Ingress Controller.
-  - external-dns com provider Cloudflare (token com permissões mínimas) e cert-manager usando DNS-01 (Cloudflare) para TLS.
-  - VPN administrativa: WireGuard (MikroTik↔VPS) ou Tailscale; restringir painéis a VPN/OIDC.
+- **Publicação/Acesso externo**
+  - Opção adotada: WireGuard site↔VPS (136.243.94.243) + NGINX/Traefik no VPS.
+    - DNS: external-dns com annotation target para 136.243.94.243 nos Ingress públicos.
+    - Proxy: VPS encaminha tráfego 80/443 para o IP MetalLB do Ingress (ex.: 192.168.1.200) via túnel.
+    - TLS: Let’s Encrypt no VPS (HSTS/Owasp headers). Opcional pass-through.
+    - Segurança: NetworkPolicy permitindo apenas o IP WireGuard do VPS (ex.: 10.8.0.1) ao namespace do Ingress.
+  - Alternativa: Cloudflare Tunnel (cloudflared) apontando para Ingress.
 
 ## 10. Checklist de Produção (mínimo viável)
 - [ ] 3 control-planes e quorum ok (etcd saudável, latência intra‑cluster baixa).
@@ -233,9 +232,9 @@ Este perfil adapta a arquitetura para um único host físico executando VirtualB
   - STG pool: 192.168.1.220-192.168.1.229
 - Portainer
   - Server exposto via HTTPS na VM dedicada (ex.: https://portainer.seu.domínio). Preferir Edge Agent nos clusters (conexão outbound), evitando exposição do agent.
-- Sem IP fixo na borda (MikroTik):
-  - Se o ISP usa CGNAT, não abrirá portas. Use Cloudflare Tunnel para HTTP(S) e VPN outbound para administração.
-  - Se há IP dinâmico público, habilitar DDNS no MikroTik e NAT apenas se necessário (menos recomendado que Tunnel/VPN).
+- Publicação via VPS (decisão)
+  - VPS IP público: 136.243.94.243. WireGuard: wg0 com 10.8.0.1 (VPS) e 10.8.0.2 (site) sugeridos.
+  - NGINX/Traefik no VPS → proxy para Ingress (MetalLB) via túnel. DNS aponta para o VPS.
 - DNS público/privado opcional com external-dns.
 
 ### 13.4 Sizing base (ajuste conforme o hardware)
@@ -517,19 +516,23 @@ Cenários e opções
 - Administração (kubectl/SSH/GUI internas)
   1) WireGuard site→hub
      - Requisitos: MikroTik RouterOS v7+, VPS com IP fixo (Ubuntu), porta UDP aberta.
-     - Fluxo: MikroTik inicia túnel WG para o VPS; admins conectam ao VPS (ou bastion) e alcançam redes do cluster via rotas/ACLs. Monitorar túnel e latência.
+     - Fluxo: MikroTik inicia túnel WG para o VPS (136.243.94.243); admins conectam ao VPS (ou bastion) e alcançam redes do cluster via rotas/ACLs.
   2) Tailscale (overlay)
-     - Vantagens: NAT traversal, sem portar; ACLs e SSO; Subnet Router para redes dos clusters. Simples para times pequenos.
-     - Nota: não roteie tráfego de pods; uso administrativo apenas.
+     - Vantagens: NAT traversal, sem portar; ACLs e SSO; Subnet Router para redes dos clusters.
+     - Nota: uso administrativo apenas.
 - Publicação HTTP(S) externa (apps/painéis)
-  - Cloudflare Tunnel (cloudflared) apontando para o Ingress do cluster. Dispensa IP fixo/portas abertas. Combine com WAF/Zero Trust e OIDC (Casdoor) para SSO.
+  - Opção adotada: VPS (136.243.94.243) com NGINX/Traefik, DNS apontando para o VPS e túnel WireGuard até o cluster.
+  - Alternativa: Cloudflare Tunnel (cloudflared) apontando para o Ingress do cluster.
 
 Requisitos e segredos
-- Domínio e provedor DNS (Cloudflare recomendado) com API Token de escopo mínimo para external-dns e cert-manager (DNS-01).
-- Chaves WireGuard (privadas no MikroTik e VPS) armazenadas no Vault e consumidas via ESO.
-- Credenciais do Cloudflare (API Token) no Vault/ESO.
+- Domínio e provedor DNS (Cloudflare recomendado) com API Token de escopo mínimo para external-dns e, se usado, cert-manager DNS-01.
+- Chaves WireGuard armazenadas no Vault e consumidas via ESO.
+- Credenciais do Cloudflare (API Token) no Vault/ESO quando external-dns gerenciar safepurelink.com.
 
 Boas práticas
-- Restringir GUIs (ArgoCD, Grafana, Portainer) ao acesso via VPN ou Tunnel + OIDC.
-- NetworkPolicies para permitir apenas egress necessário (DNS, cloudflared, IdP, registry, etc.).
-- Observabilidade do túnel VPN e do cloudflared (logs/alertas).
+- Restringir GUIs (ArgoCD, Grafana, Portainer) ao acesso via VPN ou VPS + OIDC.
+- NetworkPolicies para permitir apenas tráfego do IP WG do VPS no namespace de Ingress.
+- Observabilidade do túnel VPN e do proxy no VPS (logs/alertas).
+
+Referências
+- Runbook: `docs/runbooks/wireguard/site-to-vps.md`

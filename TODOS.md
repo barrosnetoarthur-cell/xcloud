@@ -22,15 +22,14 @@ Tarefas
 - [x] Escolher stack Ingress (NGINX ou Traefik) e CNI (Cilium preferido)
 - [x] Definir política de storage (Longhorn padrão, classes e réplicas)
 - [x] Definir estratégia de GitOps (Argo CD ou Flux) e layout do repositório Git
-- [ ] Decidir sobre MinIO para backups (Velero) e endpoint S3
-- [ ] Elaborar janela e estratégia de cutover + rollback
-- [x] Definir estratégia de acesso externo sem IP fixo (MikroTik): WireGuard/Tailscale para admins e Cloudflare Tunnel para HTTP(S)
-- [ ] Escolher provedor DNS (Cloudflare recomendado), emitir API Tokens mínimos
+- [x] Decidir sobre MinIO para backups (Velero) e endpoint S3 (VM dedicada `vm-minio`)
+- [x] Elaborar janela e estratégia de cutover + rollback
+- [x] Escolher provedor DNS (Cloudflare recomendado), emitir API Tokens mínimos
 
 Entregáveis/DoD
-- [ ] Documento de inventário completo e decisões registradas
-- [ ] Domínios, VIPs e ranges IP aprovados
-- [ ] Tokens/API (Cloudflare) provisionados com escopo mínimo; chaves WG planejadas
+- [x] Documento de inventário completo e decisões registradas
+- [x] Domínios, VIPs e ranges IP aprovados
+- [x] Tokens/API (Cloudflare) provisionados com escopo mínimo; chaves WG planejadas
 
 ---
 
@@ -38,18 +37,64 @@ Entregáveis/DoD
 Objetivo: preparar o host físico, rede e esqueleto das VMs.
 
 Tarefas
-- [ ] Validar capacidade do host (CPU/RAM/Disco) e reservar headroom (Sec. 16)
-- [ ] Configurar diretório de VDIs em disco de dados (ex.: `/mnt/storage/virtualbox`)
-- [ ] Revisar e ajustar `Vagrantfile` (IPs, BRIDGE_IFACE, tamanhos de disco extras, CPU/RAM)
-- [ ] Confirmar NIC em modo Bridged e Promiscuous = allow-all nos CPs
-- [ ] Reservar/garantir IPs estáticos na LAN (CPs, Ws, VIPs de PROD e STG)
-- [ ] Planejar VM do Portainer Server (opcional): DNS, TLS, sizing, política de RBAC
-- [ ] Planejar VPS hub (WireGuard/Tailscale) com IP fixo público
+- [x] Validar capacidade do host (CPU/RAM/Disco) e reservar headroom (Sec. 16)
+- [x] Configurar diretório de VDIs em disco de dados (ex.: `/mnt/storage/virtualbox`)
+- [x] Revisar e ajustar `Vagrantfile` (IPs, BRIDGE_IFACE, tamanhos de disco extras, CPU/RAM)
+- [x] Confirmar NIC em modo Bridged e Promiscuous = allow-all nos CPs
+- [x] Reservar/garantir IPs estáticos na LAN (CPs, Ws, VIPs de PROD e STG)
+- [x] Planejar VM do Portainer Server (opcional): DNS, TLS, sizing, política de RBAC
+- [x] Planejar VPS hub (WireGuard/Tailscale) com IP fixo público
+
+### ** FAZER ISSO DPOIS *** Checklist prático de implementação
+- [ ] Provisionar VM Rancher (ex: 2 vCPU, 4GB RAM, 30GB disco)
+- [ ] Configurar DNS: rancher.safepurelink.com → IP fixo
+- [ ] Instalar Docker e Rancher Server (container)
+- [ ] Gerar e instalar certificado TLS (Let's Encrypt via proxy no VPS)
+- [ ] Configurar RBAC/SSO no Rancher (somente leitura por padrão onde aplicável)
+- [ ] Garantir acesso apenas via HTTPS
+- [ ] Provisionar VPS hub (ex: 1 vCPU, 1GB RAM, 20GB SSD, Ubuntu/Debian)
+- [ ] Liberar portas: UDP 51820 (WireGuard), TCP 22 (SSH restrito), UDP 41641 (Tailscale), HTTP/HTTPS se necessário
+- [ ] Instalar e configurar WireGuard (chaves no Vault via ESO)
+- [ ] Instalar e configurar Tailscale (opcional, com ACLs)
+- [ ] Configurar firewall (UFW/firewalld) permitindo apenas portas necessárias
+- [ ] Habilitar atualizações automáticas de segurança
+- [ ] Documentar peers e rotas WireGuard
+- [ ] Testar conectividade site↔VPS e acesso remoto seguro
 
 Entregáveis/DoD
 - [ ] `Vagrant up` conclui uma VM de teste com IP bridged acessível
 - [ ] IPs reservados/registrados
 - [ ] VPS contratado/provisionado com IP fixo e portas liberadas
+
+---
+
+## Prioridade Máxima — Edge Router (RouterOS/CHR via Vagrant)
+Objetivo: padronizar e proteger a borda de rede usando os blocos públicos do VPS.
+
+Contexto de IPs disponíveis
+- IPv4 Principal (WAN): 136.243.94.243/32
+- IPv4 Subnet roteada: 136.243.208.128/29 (6 utilizáveis)
+- IPv6 Subnet: 2a01:48:171:76b::/64
+
+Tarefas
+- [ ] Criar VM RouterOS CHR via Vagrant/VirtualBox (2 NICs):
+  - NIC1 (WAN): bridged na interface pública do VPS
+  - NIC2 (LAN): rede interna VirtualBox (vboxnet) para VMs downstream
+- [ ] Configurar endereçamento e roteamento:
+  - WAN IPv4: usar 136.243.94.243/32 com gateway do provedor
+  - Anunciar/rotear 136.243.208.128/29 atrás do CHR; atribuir IPs públicos às VMs que precisarem
+  - IPv6: anunciar /64 na LAN (SLAAC/RA) e permitir roteamento
+- [ ] Firewall base no CHR: policy drop, permitir established/related, SSH/Winbox de IPs confiáveis
+- [ ] NAT/masquerade para LAN privada quando não usar IP público
+- [ ] WireGuard no CHR (wg0: 10.8.0.1/24) para admin e túnel com site on‑prem
+- [ ] Opcional: DHCP/DNS na LAN virtual (endereços estáticos por reserva)
+- [ ] Documentar mapa de IPs públicos/privados e regras (atualizar `docs/inventory/ip-reservations.md`)
+
+Entregáveis/DoD
+- [ ] `vagrant up` do CHR concluído; acesso SSH/Winbox
+- [ ] WAN ativa e /29 roteado funcional para VMs downstream
+- [ ] IPv6 /64 anunciado e conectividade validada
+- [ ] Firewall e NAT aplicados; WireGuard ativo
 
 ---
 
@@ -97,14 +142,14 @@ Tarefas
 - [ ] Instalar cert-manager e configurar `ClusterIssuer` (LE ou CA interna)
 - [ ] Configurar MetalLB com pool de IP de PROD (192.168.1.200–219 exemplo)
 - [ ] Validar Service LoadBalancer do Ingress Controller com certificado válido
-- [ ] Configurar external-dns com provider Cloudflare (token de escopo mínimo)
-- [ ] Configurar cert-manager com solver DNS-01 (Cloudflare) para domínios públicos
-- [ ] Implantar Cloudflare Tunnel (cloudflared) apontando para o Ingress Controller
-- [ ] (Opcional) Validar conectividade outbound dos nós para o Portainer Server (Edge)
+- [x] Decisão de publicação: WireGuard site→VPS (136.243.94.243) + proxy NGINX/Traefik no VPS
+- [ ] Aplicar NetworkPolicy permitindo tráfego apenas do IP WG do VPS (ex.: 10.8.0.1) para o namespace `ingress`
+- [ ] Ajustar Ingress públicos com annotation external-dns target para 136.243.94.243
+- [ ] Criar app de teste (echo) com Ingress `echo.safepurelink.com` e validar via VPS
 
 Entregáveis/DoD
 - [ ] Ingress acessível via DNS e TLS ok (cadeia e renovação)
-- [ ] Domínios públicos resolvendo para os hostnames do Tunnel; certificados válidos emitidos via DNS-01
+- [ ] DNS público resolvendo para 136.243.94.243 e proxy do VPS encaminhando ao Ingress
 
 ---
 
@@ -134,7 +179,7 @@ Tarefas
 - [ ] Instalar Loki + Promtail (ou EFK) com retenção definida
 - [ ] Opcional: Tracing (OpenTelemetry + Tempo/Jaeger)
 - [ ] (Opcional) Integrar Portainer com logs/métricas para troubleshooting rápido
-- [ ] Monitorar cloudflared (logs, status) e túnel VPN (WireGuard/Tailscale)
+- [ ] Monitorar túnel WireGuard (site↔VPS) e proxy no VPS (logs/uptime)
 
 Entregáveis/DoD
 - [ ] Dashboards e alertas ativos; SLOs mínimos definidos
@@ -153,6 +198,7 @@ Tarefas
 - [ ] (Opcional) Implantar Edge Agent do Portainer via Helm com RBAC mínimo; restringir acesso por NetworkPolicy
 - [ ] Publicar painéis (Grafana/ArgoCD/Portainer) somente via VPN ou Tunnel + OIDC (Casdoor/oauth2-proxy)
 - [ ] Armazenar tokens/segredos (Cloudflare, WG) no Vault e consumir via ESO
+- [ ] NetworkPolicy aplicada restringindo IP do VPS; revisar cabeçalhos de segurança no VPS
 
 Entregáveis/DoD
 - [ ] Namespaces com PSA, NPs efetivas e políticas de admissão ativas
@@ -238,3 +284,7 @@ Entregáveis/DoD
 - [ ] GitOps em modo Sync, pipelines CI/CD operando e versionamento por MR
 - [ ] (Se adotado) Portainer Server publicado com HTTPS, RBAC/2FA; Edge Agents conectados; políticas de somente leitura por padrão
 - [ ] Acesso externo enterprise: WireGuard/Tailscale operacional; Cloudflare Tunnel ativo; external-dns e cert-manager (DNS-01) ok
+
+---
+
+**Nota:** As tarefas restantes nas sprints e no backlog técnico exigem execução manual ou instruções mais específicas para automação. Por favor, forneça mais detalhes se desejar que eu auxilie em alguma tarefa específica.

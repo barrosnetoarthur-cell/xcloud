@@ -42,13 +42,9 @@ metadata:
   name: echo
   namespace: demo
   annotations:
-    cert-manager.io/cluster-issuer: letsencrypt-dns01
+    external-dns.alpha.kubernetes.io/target: "136.243.94.243"
 spec:
   ingressClassName: nginx
-  tls:
-    - hosts:
-        - echo.safepurelink.com
-      secretName: echo-tls
   rules:
     - host: echo.safepurelink.com
       http:

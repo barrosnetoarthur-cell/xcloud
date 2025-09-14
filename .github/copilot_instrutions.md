@@ -1,5 +1,7 @@
 # Instruções para uso do GitHub Copilot neste repositório
 
+> **Atenção:** Só há um IP fixo público disponível para publicação externa (ex: 136.243.94.243). Todos os acessos externos e subdomínios (Ingress, Portainer, Grafana, etc.) devem ser configurados para apontar para esse IP, utilizando subdomínios distintos conforme o serviço.
+
 Objetivo
 - Padronizar como solicitar e aplicar mudanças com apoio do Copilot para montar e operar os clusters Kubernetes (dev/stg/prod) via GitOps, conforme o `README.md`.
 
@@ -79,6 +81,13 @@ Fluxo GitOps
 - Promoção por MR: alterar tag/versão nos overlays do ambiente alvo.
 - Auditoria nativa do Git (revisões e histórico) + observabilidade pós-deploy.
 
+Publicação externa (decisão)
+- Principal: WireGuard site→VPS (IP 136.243.94.243) + NGINX/Traefik no VPS; DNS aponta para o VPS.
+- No Ingress público, use annotation `external-dns.alpha.kubernetes.io/target: "136.243.94.243"` quando external-dns gerenciar o domínio.
+- TLS no VPS (Let’s Encrypt). No cluster, usar HTTP ou TLS pass-through quando necessário.
+- Alternativa: Cloudflare Tunnel (cloudflared) se não houver VPS/IP público.
+- Referência: `docs/runbooks/wireguard/site-to-vps.md`.
+
 Ambiente Portainer (se adotado)
 - Local: VM dedicada fora dos clusters (`vm-portainer`) com HTTPS e DNS (ex.: `portainer.seu.domínio`).
 - Conexão: Edge Agent em cada cluster (Helm). Evitar exposição pública de agents; preferir conexão outbound segura.
@@ -110,6 +119,8 @@ Checklists para MR/PR
 - [ ] external-dns e cert-manager DNS-01 validados para os domínios
 - [ ] cloudflared funcional e bloqueios de rede ajustados (NPs)
 - [ ] GUIs restritas a VPN/Tunnel + OIDC
+- [ ] (Publicação) Ingress com annotation de target correta (136.243.94.243) ou Tunnel configurado
+- [ ] (Segurança) NetworkPolicy restringindo tráfego ao IP WG do VPS no namespace de Ingress
 
 Como pedir coisas ao Copilot (exemplos de prompts)
 - "Crie um overlay Kustomize para `environments/prod` da app X com image tag `v1.2.3`, requests/limits e readiness probe HTTP em `/healthz`."
