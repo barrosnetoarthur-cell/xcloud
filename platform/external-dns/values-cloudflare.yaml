@@ -1,0 +1,21 @@
+provider: cloudflare
+cloudflare:
+  apiTokenSecretRef:
+    name: external-dns-cloudflare
+    key: api-token
+sources:
+  - ingress
+  - service
+policy: sync
+registry: txt
+txtOwnerId: prod
+txtPrefix: k8s-
+domainFilters:
+  - safepurelink.com
+serviceAccount:
+  create: true
+rbac:
+  create: true
+metrics:
+  enabled: true
+logLevel: info

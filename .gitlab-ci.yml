@@ -1,0 +1,11 @@
+stages:
+  - validate
+
+validate:kustomize:
+  stage: validate
+  image: bitnami/kubectl:1.29
+  script:
+    - set -euo pipefail
+    - for env in environments/base environments/dev environments/stg environments/prod; do echo "Validating $env"; kubectl kustomize $env >/dev/null; done
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH'

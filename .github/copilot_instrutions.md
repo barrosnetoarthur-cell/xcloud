@@ -27,6 +27,12 @@ Branches e versionamento
 - feature/<slug>, fix/<slug>, chore/<slug> para mudanças.
 - Conventional Commits (feat, fix, chore, docs, refactor, perf, test, ci, build).
 
+Repositório remoto (GitLab)
+- Origem do código e GitOps: GitLab (self-hosted ou SaaS). Configure `origin` para GitLab.
+- Copilot é apenas apoio ao desenvolvimento; não é repositório.
+- Nunca cole tokens/segredos na conversa ou no repo. Se ocorrer vazamento: ROTACIONAR imediatamente.
+- Segredos sempre via Vault + External Secrets Operator (ESO).
+
 Boas práticas de Git (sempre comitar)
 - Faça mudanças atômicas e pequenos MRs.
 - Sempre versionar alterações geradas com o Copilot (sem drifts fora do GitOps).
@@ -84,6 +90,7 @@ Acesso remoto enterprise (sem IP fixo, MikroTik)
   - Publicação HTTP(S): Cloudflare Tunnel (cloudflared) + external-dns (Cloudflare) + cert-manager DNS-01.
 - Segredos e credenciais
   - Armazenar tokens Cloudflare, chaves WireGuard e credenciais no Vault e consumir via ESO.
+  - Se algum token for exposto, ROTACIONAR no provedor imediatamente e atualizar no Vault/ESO.
   - Não expor portas em WAN quando sob CGNAT; preferir túneis outbound.
 - Políticas
   - GUIs (ArgoCD, Grafana, Portainer) restritas a VPN ou Tunnel + OIDC (Casdoor/oauth2-proxy).
