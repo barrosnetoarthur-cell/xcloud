@@ -1,0 +1,9 @@
+controller:
+  replicaCount: 1
+  service:
+    type: LoadBalancer
+    loadBalancerIP: 192.168.1.200 # ajuste dentro do pool MetalLB (PROD)
+  metrics:
+    enabled: true
+  admissionWebhooks:
+    enabled: true
