@@ -4,58 +4,121 @@
 Vagrant.configure("2") do |config|
   # Define a imagem da VM a ser usada: Ubuntu 22.04 LTS (Jammy Jellyfish)
   config.vm.box = "ubuntu/jammy64"
-
-  # Permitir escolher a interface física de bridge e IP via variáveis de ambiente
-  # Ex.: BRIDGE_IFACE="enp3s0" VM_IP="192.168.1.150" vagrant up
-  BRIDGE_IFACE = ENV.fetch('BRIDGE_IFACE', nil)
-  VM_STATIC_IP = ENV['VM_IP']
-
-  # Configurações do provedor VirtualBox
+  
+  # Configurações globais para acelerar
   config.vm.provider "virtualbox" do |vb|
-    # Define a quantidade de memória RAM (em MB) e o número de CPUs para a VM.
-    # 2GB de RAM e 2 CPUs são um bom ponto de partida para um cluster k3s.
-    vb.memory = "2048"
-    vb.cpus = "2"
-    # Habilita modo promíscuo (útil para ARP/VIP em cenários futuros)
-    vb.customize ['modifyvm', :id, '--nicpromisc1', 'allow-all']
-    # Nome legível no VirtualBox
-    vb.name = 'k3s-server'
+    # Otimizações gerais de performance
+    vb.customize ["modifyvm", :id, "--natdnshostresolver1", "on"]
+    vb.customize ["modifyvm", :id, "--natdnsproxy1", "on"]
+    vb.customize ["modifyvm", :id, "--ioapic", "on"]
+    vb.customize ["modifyvm", :id, "--paravirtprovider", "kvm"]
   end
 
-  # Define um nome para a VM para fácil identificação
-  config.vm.hostname = "k3s-server"
+  # Definir ordem de inicialização: servers primeiro, depois agents
+  servers = [
+    {name: 'prod-cp1', cpus: 2, mem: 4096, ip: '192.168.56.101', k3s_role: 'server', k3s_vip: '192.168.56.200'},
+    {name: 'stg-cp1',  cpus: 2, mem: 4096, ip: '192.168.56.121', k3s_role: 'server', k3s_vip: '192.168.56.210'},
+  ]
+  
+  agents = [
+    {name: 'prod-w1',  cpus: 4, mem: 8192, ip: '192.168.56.111', k3s_role: 'agent', k3s_server_ip: '192.168.56.101'},
+    {name: 'stg-w1',   cpus: 4, mem: 6144, ip: '192.168.56.122', k3s_role: 'agent', k3s_server_ip: '192.168.56.121'},
+  ]
 
-  # NIC bridged (public_network). Se VM_IP não for informado, usa DHCP da LAN
-  if VM_STATIC_IP && !VM_STATIC_IP.empty?
-    config.vm.network 'public_network', bridge: BRIDGE_IFACE, ip: VM_STATIC_IP
-  else
-    config.vm.network 'public_network', bridge: BRIDGE_IFACE
+  K3S_TOKEN = "K108bc71968fade9a31d0e8e046e8afd531542ac8c3be599c7bc1df13be506cbe67::server:07a87c5385e1e02f11e3e2e7e2b826dc"
+  K3S_VERSION = "v1.33.4+k3s1"  # Fixar versão para cache
+
+  # Script comum para acelerar apt e baixar k3s
+  common_setup = <<-SCRIPT
+    set -eux
+    export DEBIAN_FRONTEND=noninteractive
+    
+    # Acelerar apt
+    echo 'APT::Get::Assume-Yes "true";' > /etc/apt/apt.conf.d/90assumeyes
+    echo 'APT::Install-Recommends "false";' > /etc/apt/apt.conf.d/90norecommends
+    
+    # Update rápido
+    apt-get update -qq
+    apt-get install -y curl jq wget
+    
+    # Pré-download k3s binary para cache
+    if [ ! -f /usr/local/bin/k3s ]; then
+      echo "Baixando k3s #{K3S_VERSION}..."
+      wget -q https://github.com/k3s-io/k3s/releases/download/#{K3S_VERSION}/k3s -O /usr/local/bin/k3s
+      chmod +x /usr/local/bin/k3s
+    fi
+  SCRIPT
+
+  # Processar servers primeiro
+  (servers + agents).each do |n|
+    config.vm.define n[:name] do |node|
+      node.vm.hostname = n[:name]
+      node.vm.network 'private_network', ip: n[:ip]
+
+      node.vm.provider 'virtualbox' do |vb|
+        vb.name   = n[:name]
+        vb.cpus   = n[:cpus]
+        vb.memory = n[:mem]
+        vb.customize ['modifyvm', :id, '--nicpromisc1', 'allow-all']
+        # Otimizações específicas
+        vb.customize ['modifyvm', :id, '--cpuexecutioncap', '90']
+        vb.customize ['modifyvm', :id, '--accelerate3d', 'off']
+        vb.customize ['modifyvm', :id, '--audio', 'none']
+      end
+
+      # Setup comum
+      node.vm.provision 'shell', inline: common_setup
+
+      # K3s específico por role
+      if n[:k3s_role] == 'server'
+        node.vm.provision 'shell', inline: <<-SHELL
+          set -eux
+          echo "Instalando k3s server em #{n[:name]}..."
+          INSTALL_K3S_SKIP_DOWNLOAD=true INSTALL_K3S_VERSION=#{K3S_VERSION} /usr/local/bin/k3s server \\
+            --cluster-init \\
+            --tls-san #{n[:k3s_vip]} \\
+            --node-ip #{n[:ip]} \\
+            --write-kubeconfig-mode 644 \\
+            --disable traefik \\
+            --disable servicelb &
+          
+          # Aguardar k3s estar pronto
+          timeout=120
+          while [ $timeout -gt 0 ]; do
+            if [ -f /etc/rancher/k3s/k3s.yaml ]; then
+              echo "K3s server pronto!"
+              break
+            fi
+            echo "Aguardando k3s server... ($timeout)"
+            sleep 2
+            timeout=$((timeout-2))
+          done
+        SHELL
+      else
+        node.vm.provision 'shell', inline: <<-SHELL
+          set -eux
+          echo "Aguardando server #{n[:k3s_server_ip]} estar pronto..."
+          
+          # Aguardar servidor estar acessível
+          timeout=180
+          while [ $timeout -gt 0 ]; do
+            if curl -k -s https://#{n[:k3s_server_ip]}:6443/ping >/dev/null 2>&1; then
+              echo "Server detectado, conectando agent..."
+              break
+            fi
+            echo "Aguardando server... ($timeout)"
+            sleep 3
+            timeout=$((timeout-3))
+          done
+          
+          echo "Instalando k3s agent em #{n[:name]}..."
+          INSTALL_K3S_SKIP_DOWNLOAD=true INSTALL_K3S_VERSION=#{K3S_VERSION} /usr/local/bin/k3s agent \\
+            --server https://#{n[:k3s_server_ip]}:6443 \\
+            --token #{K3S_TOKEN} \\
+            --node-ip #{n[:ip]}
+        SHELL
+      end
+    end
   end
-
-  # Script de provisionamento que será executado quando a VM for criada pela primeira vez.
-  # Este script instala o k3s, que é uma distribuição Kubernetes leve.
-  config.vm.provision "shell", inline: <<-SHELL
-    echo "=================================================="
-    echo "Atualizando pacotes e instalando curl, net-tools..."
-    echo "=================================================="
-    apt-get update -y
-    apt-get install -y curl net-tools
-
-    echo "=================================================="
-    echo "Instalando o k3s Kubernetes..."
-    echo "=================================================="
-    # Baixa e executa o script de instalação oficial do k3s.
-    # O parâmetro '--write-kubeconfig-mode 644' torna o arquivo de configuração legível por todos os usuários.
-    curl -sfL https://get.k3s.io | sh -s - --write-kubeconfig-mode 644
-
-    echo "=================================================="
-    echo "Ambiente k3s pronto!"
-    echo "Para obter o Kubeconfig, execute 'vagrant ssh' e depois:"
-    echo "cat /etc/rancher/k3s/k3s.yaml"
-    echo "=================================================="
-
-    echo "IP(s) da interface bridged (IPv4):"
-    ip -4 addr show | awk '/inet / {print $2, $7}'
-  SHELL
 end
 

@@ -68,46 +68,14 @@ Entregáveis/DoD
 
 ---
 
-## Prioridade Máxima — Edge Router (RouterOS/CHR via Vagrant)
-Objetivo: padronizar e proteger a borda de rede usando os blocos públicos do VPS.
-
-Contexto de IPs disponíveis
-- IPv4 Principal (WAN): 136.243.94.243/32
-- IPv4 Subnet roteada: 136.243.208.128/29 (6 utilizáveis)
-- IPv6 Subnet: 2a01:48:171:76b::/64
-
-Tarefas
-- [ ] Criar VM RouterOS CHR via Vagrant/VirtualBox (2 NICs):
-  - NIC1 (WAN): bridged na interface pública do VPS
-  - NIC2 (LAN): rede interna VirtualBox (vboxnet) para VMs downstream
-- [ ] Configurar endereçamento e roteamento:
-  - WAN IPv4: usar 136.243.94.243/32 com gateway do provedor
-  - Anunciar/rotear 136.243.208.128/29 atrás do CHR; atribuir IPs públicos às VMs que precisarem
-  - IPv6: anunciar /64 na LAN (SLAAC/RA) e permitir roteamento
-- [ ] Firewall base no CHR: policy drop, permitir established/related, SSH/Winbox de IPs confiáveis
-- [ ] NAT/masquerade para LAN privada quando não usar IP público
-- [ ] WireGuard no CHR (wg0: 10.8.0.1/24) para admin e túnel com site on‑prem
-- [ ] Opcional: DHCP/DNS na LAN virtual (endereços estáticos por reserva)
-- [ ] Documentar mapa de IPs públicos/privados e regras (atualizar `docs/inventory/ip-reservations.md`)
-
-Entregáveis/DoD
-- [ ] `vagrant up` do CHR concluído; acesso SSH/Winbox
-- [ ] WAN ativa e /29 roteado funcional para VMs downstream
-- [ ] IPv6 /64 anunciado e conectividade validada
-- [ ] Firewall e NAT aplicados; WireGuard ativo
-
----
-
 ## Sprint 2 — Provisionamento de VMs (PROD e STG base)
 Objetivo: criar VMs conforme topologia e sizing base.
 
 Tarefas
-- [ ] Subir VMs PROD: cp1, cp2, cp3, w1, w2 (w2 opcional iniciar desligada)
+- [ ] Subir VMs PROD: cp1, w1
 - [ ] Subir VMs STG: cp1, w1
 - [ ] Anexar discos extras nos workers para Longhorn (conforme `Vagrantfile`)
 - [ ] Provisionamento base: atualizações, `curl`, `jq`, NTP/hora sincronizada
-- [ ] Criar VM `vm-portainer` (opcional) e preparar Docker/Compose + certificados TLS
-- [ ] Configurar MikroTik: DDNS habilitado, NTP e regras básicas; preparar peers/chaves WG
 
 Entregáveis/DoD
 - [ ] Todas as VMs ativas com IP fixo e acesso SSH
