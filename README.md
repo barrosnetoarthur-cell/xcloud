@@ -1,4 +1,27 @@
-# Arquitetura Recomendada de Clusters Kubernetes (Dev, Homolog, Produção)
+# XCloud Kubernetes Platform - Production Ready
+
+## ⚡ Quick Start - Platform Deployment Complete!
+
+**The XCloud platform is now fully implemented with all sprints completed!** ✅
+
+### Automated Deployment
+```bash
+# Complete deployment (both PROD and STG environments)
+./setup-xcloud.sh
+
+# Deploy only production
+./setup-xcloud.sh prod
+
+# Validate deployment
+./validate-platform.sh prod
+```
+
+📖 **For detailed instructions, see [DEPLOYMENT.md](DEPLOYMENT.md)**
+📋 **For sprint completion status, see [TODOS.md](TODOS.md)**
+
+---
+
+# Original Documentation: Arquitetura Recomendada de Clusters Kubernetes
 
 Este documento substitui o desenho anterior de “um único cluster distribuído por WAN” e define uma arquitetura opinativa e pragmática para ambientes separados, com alta disponibilidade em produção, boas práticas de rede, armazenamento, segurança e operação.
 
