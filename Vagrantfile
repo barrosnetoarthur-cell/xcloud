@@ -21,8 +21,8 @@ Vagrant.configure("2") do |config|
   ]
   
   agents = [
-    {name: 'prod-w1',  cpus: 4, mem: 8192, ip: '192.168.56.111', k3s_role: 'agent', k3s_server_ip: '192.168.56.101'},
-    {name: 'stg-w1',   cpus: 4, mem: 6144, ip: '192.168.56.122', k3s_role: 'agent', k3s_server_ip: '192.168.56.121'},
+    {name: 'prod-w1',  cpus: 4, mem: 8192, ip: '192.168.56.111', k3s_role: 'agent', k3s_server_ip: '192.168.56.101', disks: [200]},
+    {name: 'stg-w1',   cpus: 4, mem: 6144, ip: '192.168.56.122', k3s_role: 'agent', k3s_server_ip: '192.168.56.121', disks: [150]},
   ]
 
   K3S_TOKEN = "K108bc71968fade9a31d0e8e046e8afd531542ac8c3be599c7bc1df13be506cbe67::server:07a87c5385e1e02f11e3e2e7e2b826dc"
@@ -69,11 +69,37 @@ Vagrant.configure("2") do |config|
       # Setup comum
       node.vm.provision 'shell', inline: common_setup
 
+      # Discos extras para Longhorn (apenas workers)
+      if n[:disks] && !n[:disks].empty?
+        n[:disks].each_with_index do |size_gb, i|
+          disk_path = "./#{n[:name]}-disk#{i+1}.vdi"
+          node.vm.provider 'virtualbox' do |vb|
+            unless File.exist?(disk_path)
+              vb.customize ['createhd', '--filename', disk_path, '--size', size_gb * 1024]
+            end
+            vb.customize ['storageattach', :id, '--storagectl', 'SATA Controller', '--port', 2 + i, '--device', 0, '--type', 'hdd', '--medium', disk_path]
+          end
+        end
+      end
+
       # K3s específico por role
       if n[:k3s_role] == 'server'
         node.vm.provision 'shell', inline: <<-SHELL
           set -eux
           echo "Instalando k3s server em #{n[:name]}..."
+          
+          # Criar diretório para manifests estáticos
+          mkdir -p /var/lib/rancher/k3s/server/manifests-staging
+          
+          # Copiar kube-vip manifest se for o primeiro control plane
+          if [ "#{n[:name]}" == "prod-cp1" ] || [ "#{n[:name]}" == "stg-cp1" ]; then
+            cp /vagrant/platform/kube-vip/kube-vip.yaml /var/lib/rancher/k3s/server/manifests-staging/
+            # Ajustar VIP baseado no ambiente
+            if [ "#{n[:name]}" == "stg-cp1" ]; then
+              sed -i 's/192.168.56.200/192.168.56.210/' /var/lib/rancher/k3s/server/manifests-staging/kube-vip.yaml
+            fi
+          fi
+          
           INSTALL_K3S_SKIP_DOWNLOAD=true INSTALL_K3S_VERSION=#{K3S_VERSION} /usr/local/bin/k3s server \\
             --cluster-init \\
             --tls-san #{n[:k3s_vip]} \\
@@ -90,6 +116,18 @@ Vagrant.configure("2") do |config|
               break
             fi
             echo "Aguardando k3s server... ($timeout)"
+            sleep 2
+            timeout=$((timeout-2))
+          done
+          
+          # Aguardar API estar respondendo
+          timeout=120
+          while [ $timeout -gt 0 ]; do
+            if curl -k -s https://#{n[:ip]}:6443/ping >/dev/null 2>&1; then
+              echo "API server pronto!"
+              break
+            fi
+            echo "Aguardando API server... ($timeout)"
             sleep 2
             timeout=$((timeout-2))
           done

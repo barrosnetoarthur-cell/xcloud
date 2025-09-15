@@ -1,0 +1,44 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cilium-config
+  namespace: kube-system
+data:
+  # Enable Hubble for observability
+  enable-hubble: "true"
+  hubble-socket-path: "/var/run/cilium/hubble.sock"
+  hubble-metrics-server: ":9091"
+  hubble-listen-address: ":4244"
+  
+  # Enable network policies
+  enable-policy: "enforce"
+  
+  # Enable bandwidth manager
+  enable-bandwidth-manager: "true"
+  
+  # Enable local redirect policy
+  enable-local-redirect-policy: "true"
+  
+  # CNI configuration
+  cni-exclusive: "false"
+  
+  # IPAM configuration  
+  ipam: "kubernetes"
+  
+  # Cluster networking
+  cluster-name: "default"
+  cluster-id: "0"
+  
+  # Disable masquerading for better performance in private networks
+  enable-ipv4-masquerade: "false"
+  
+  # Enable direct routing for better performance
+  tunnel: "disabled"
+  auto-direct-node-routes: "true"
+  
+  # Enable host services
+  enable-host-reachable-services: "true"
+  
+  # Monitoring
+  prometheus-serve-addr: ":9090"
+  operator-prometheus-serve-addr: ":6942"
